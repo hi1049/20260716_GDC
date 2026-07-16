@@ -4,7 +4,7 @@ import json
 import urllib.request
 import urllib.parse
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -117,6 +117,10 @@ def load_replay_data():
 @app.get("/")
 async def get_index():
     return FileResponse(os.path.join(static_dir, "index.html"))
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
 
 @app.get("/api/status")
 async def get_status(force_refresh: bool = False):
@@ -308,15 +312,8 @@ async def get_advice():
     total_mix = sum(mix.values()) or 1
     mix_pct = {k: round(v / total_mix * 100, 1) for k, v in mix.items()}
     
-    # Check if Gemini key is available
-    if not GEMINI_API_KEY:
-        # Key not set, programmatically return intelligent dynamic fallback!
-        return JSONResponse(status_code=200, content=get_hardcoded_fallback(stress_col, ci))
-        
+    # 2. Call Gemini (API Key or Google Cloud Vertex AI ADC Hybrid)
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        
         prompt = f"""
         한국 전력망의 현재 수급 및 발전 탄소 데이터를 기반으로, ML 학습이나 대용량 GPU 컨테이너 워크로드를 돌리는 데이터센터 및 클라우드 운영자를 위한 스케줄 가이드를 JSON 형태로 분석해줘.
 
@@ -346,18 +343,63 @@ async def get_advice():
           "estimated_saving": "탄소 집약도 차이 기반 예측 탄소/비용 절감율 % 표기 (예: 22.4% 절감 예상)"
         }}
         """
-        
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
-        )
-        
-        result_json = json.loads(response.text.strip())
-        return JSONResponse(status_code=200, content=result_json)
-        
+
+        # Utilize the new official google-genai SDK
+        from google import genai
+        from google.genai import types
+
+        if GEMINI_API_KEY:
+            # 1. API Key mode with google-genai
+            print("API Key found. Utilizing the new unified google-genai SDK (Gemini API)...")
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            result_json = json.loads(response.text.strip())
+            return JSONResponse(status_code=200, content=result_json)
+        else:
+            # 2. Application Default Credentials mode with google-genai (Vertex AI)
+            print("No GEMINI_API_KEY set. Utilizing the new unified google-genai SDK (Vertex AI) via ADC...")
+            import google.auth
+            
+            # Retrieve project ID from default credentials
+            try:
+                credentials, project_id = google.auth.default()
+            except Exception as auth_err:
+                print(f"Failed to fetch default credentials: {auth_err}")
+                project_id = None
+                
+            if not project_id:
+                project_id = os.environ.get("GCP_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+                
+            if not project_id:
+                print("⚠️ GCP Project ID could not be determined. Falling back to dynamic rules.")
+                return JSONResponse(status_code=200, content=get_hardcoded_fallback(stress_col, ci))
+                
+            # Initialize google-genai client configured for Vertex AI
+            # Changed from asia-northeast3 to asia-northeast1 (Tokyo) because gemini-3.5-flash is not yet GA in Seoul but is fully supported in Tokyo.
+            client = genai.Client(
+                vertexai=True,
+                project=project_id,
+                location="asia-northeast1"
+            )
+            
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            result_json = json.loads(response.text.strip())
+            return JSONResponse(status_code=200, content=result_json)
+            
     except Exception as e:
-        # Logging or console trace, then return rich dynamic fallback
         print(f"Gemini calling error, entering fallback: {str(e)}")
         return JSONResponse(status_code=200, content=get_hardcoded_fallback(stress_col, ci))
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VoltWise (볼트와이즈) - ESG 실시간 전력수급 연계 AI 서버 가동 스케줄러</title>
+    <title>GridPulse — Carbon-Aware AI Workload Scheduler</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,36 +24,39 @@
         <!-- Header -->
         <header class="app-header">
             <div class="logo">
-                <i class="fa-solid fa-leaf-lightning logo-icon"></i>
-                <span class="logo-text">Volt<span>Wise</span></span>
-                <span class="logo-tag">ESG Grid Optimizer</span>
+                <i class="fa-solid fa-leaf logo-icon"></i>
+                <span class="logo-text">Grid<span>Pulse</span></span>
+                <span class="logo-tag">Carbon-Aware Computing Advisor</span>
             </div>
             <div class="header-right">
                 <span class="status-badge" id="live-time">
-                    <i class="fa-regular fa-clock"></i> 2026-07-16 13:30 KST
+                    <i class="fa-regular fa-clock"></i> -----
                 </span>
-                <span class="api-source-badge">
-                    <i class="fa-solid fa-database"></i> KPX 실시간 연동됨
+                <span class="api-source-badge" id="mode-badge">
+                    <i class="fa-solid fa-server"></i> REPLAY SIMULATION
                 </span>
+                <button class="switcher-btn active" id="btn-force-tick" title="시뮬레이션 시간 강제 롤링 / 실시간 강제 새로고침">
+                    <i class="fa-solid fa-forward-step"></i> TICK
+                </button>
             </div>
         </header>
 
-        <!-- Main Dashboard Grid -->
-        <main class="dashboard-grid">
+        <!-- Main Dashboard Grid (3 Columns) -->
+        <main class="dashboard-grid three-cols">
             
-            <!-- Left Side: Live Status Gauges -->
+            <!-- Column 1: Live Grid Stress & Gauges -->
             <section class="grid-card status-card">
                 <div class="card-header">
-                    <div class="card-icon-wrapper"><i class="fa-solid fa-bolt-lightning"></i></div>
-                    <h3>실시간 전력망 수급 현황</h3>
+                    <div class="card-icon-wrapper"><i class="fa-solid fa-bolt"></i></div>
+                    <h3>실시간 전력망 수급 상태</h3>
                 </div>
                 
                 <div class="live-indicator-container">
                     <div class="live-glowing-indicator" id="status-glow"></div>
                     <div class="live-status-details">
-                        <span class="section-sub">현재 전력 등급</span>
+                        <span class="section-sub">그리드 스트레스 등급</span>
                         <h2 id="status-desc">데이터 조회 중...</h2>
-                        <p class="status-tip" id="status-tip-text">공공데이터 포털에서 한국전력거래소 실시간 수치를 가져오고 있습니다.</p>
+                        <p class="status-tip" id="status-tip-text">한국전력거래소 실시간 수치를 가져오고 있습니다.</p>
                     </div>
                 </div>
 
@@ -99,170 +102,220 @@
                         <span class="num-val" id="oper-reserve-mw">---- MW</span>
                     </div>
                     <div class="num-item">
-                        <span class="num-label">금일 예측 부하</span>
+                        <span class="num-label">금일 예측 최대부하</span>
                         <span class="num-val" id="forecast-load">---- MW</span>
                     </div>
                 </div>
             </section>
 
-            <!-- Right Side: AI Eco Scheduler -->
-            <section class="grid-card scheduler-card">
+            <!-- Column 2: Generation Mix & Carbon Intensity -->
+            <section class="grid-card generation-card">
                 <div class="card-header">
-                    <div class="card-icon-wrapper"><i class="fa-solid fa-server"></i></div>
-                    <h3>AI 서버 학습 최적 스케줄러</h3>
+                    <div class="card-icon-wrapper"><i class="fa-solid fa-leaf"></i></div>
+                    <h3>발전원별 믹스 & 탄소량</h3>
+                </div>
+
+                <!-- Carbon Intensity Display -->
+                <div class="carbon-intensity-panel">
+                    <div class="ci-metric">
+                        <span class="ci-label">실시간 탄소집약도</span>
+                        <div class="ci-score">
+                            <span id="ci-value">---</span>
+                            <span class="ci-unit">gCO₂eq/kWh</span>
+                        </div>
+                    </div>
+                    <div class="ci-badge" id="ci-badge-el">
+                        <i class="fa-solid fa-seedling"></i> <span id="ci-badge-text">계산 중</span>
+                    </div>
+                </div>
+
+                <!-- Donut Chart -->
+                <div class="donut-chart-container">
+                    <canvas id="generationMixChart"></canvas>
                 </div>
                 
-                <p class="card-intro">서버의 예상 작동 소요 시간을 입력해주시면 전력망의 탄소 부하 및 전력 요금을 종합한 최적의 ESG 매니지먼트 가동 시간대를 연산합니다.</p>
-
-                <!-- Input Panel -->
-                <div class="scheduler-input-panel">
-                    <div class="slider-header">
-                        <span class="slider-label">예상 서버 가동 시간</span>
-                        <span class="slider-value-display"><span id="duration-display">4</span>시간</span>
-                    </div>
-                    <div class="slider-container">
-                        <input type="range" id="duration-slider" min="1" max="24" value="4" class="modern-slider">
-                        <div class="slider-ticks">
-                            <span>1h</span>
-                            <span>4h</span>
-                            <span>8h</span>
-                            <span>12h</span>
-                            <span>16h</span>
-                            <span>20h</span>
-                            <span>24h</span>
-                        </div>
-                    </div>
-                    <button class="action-btn" id="btn-calculate">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> 최적 가동 시간대 연산하기
-                    </button>
-                </div>
-
-                <!-- Results Recommendations -->
-                <div class="recommendations-container">
-                    <h4 class="section-sub-title"><i class="fa-solid fa-ranking-star"></i> AI 권장 가동 시나리오 TOP 3</h4>
-                    <div class="rec-list" id="recommendations-list">
-                        <!-- Simulated Loaders -->
-                        <div class="loading-state">
-                            <i class="fa-solid fa-circle-notch fa-spin"></i> 최적 시간대 탐색 중...
-                        </div>
-                    </div>
+                <div class="gen-mix-details" id="gen-mix-list-el">
+                    <!-- Dynamic legend list with values -->
                 </div>
             </section>
 
-            <!-- Bottom Left: 24-Hour Graph -->
-            <section class="grid-card chart-card">
-                <div class="card-header" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="card-icon-wrapper"><i class="fa-solid fa-chart-line"></i></div>
-                        <h3 id="chart-title">24시간 실시간 수급 추이</h3>
-                    </div>
-                    <div class="chart-tab-switcher">
-                        <button class="switcher-btn active" id="btn-chart-24h">24시간 추이</button>
-                        <button class="switcher-btn" id="btn-chart-7d">7일 수급 추이</button>
-                    </div>
-                </div>
-                <div class="chart-wrapper">
-                    <canvas id="gridTrendChart"></canvas>
-                </div>
-            </section>
-
-            <!-- Bottom Right: Developer CLI Integration Guide -->
-            <section class="grid-card dev-card">
+            <!-- Column 3: Gemini Smart Advisor Panel -->
+            <section class="grid-card scheduler-card advisor-card">
                 <div class="card-header">
-                    <div class="card-icon-wrapper"><i class="fa-solid fa-code"></i></div>
-                    <h3>ML Pipeline & DevOps 연동 코드 가이드</h3>
+                    <div class="card-icon-wrapper spark-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                    <h3>Gemini Carbon-Aware AI 추천</h3>
                 </div>
-                <p class="card-intro">MLOps 가동 환경(Airflow, Jenkins, Python script)에 즉시 연동 가능한 실시간 전력 상태 체크 스크립트 템플릿입니다.</p>
-                
-                <div class="tab-container">
-                    <div class="tab-header">
-                        <button class="tab-btn active" data-tab="tab-bash">Shell (curl)</button>
-                        <button class="tab-btn" data-tab="tab-python">Python Script</button>
-                        <button class="tab-btn" data-tab="tab-actions">GitHub Actions</button>
+
+                <div class="ai-decision-panel">
+                    <div class="decision-badge" id="ai-recommendation-badge">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> 분석 중
                     </div>
-                    
-                    <div class="tab-content active" id="tab-bash">
-                        <pre><code># 실시간 전력 등급이 GREEN(최적)일 때에만 학습 컨테이너를 실행
-STATUS=$(curl -s http://localhost:8000/api/status/live | jq -r .rating.code)
-
-if [ "$STATUS" = "GREEN" ]; then
-  echo "✅ 전력 공급 여유 충만 (탄소 배출 최소). ML 학습 가동!"
-  python train.py
-else
-  echo "⚠️ 전력 피크 및 고탄소 발전 시간대. 학습 1시간 일시 대기..."
-  sleep 3600
-fi</code></pre>
-                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
+                    <div class="ai-metric-grid">
+                        <div class="ai-metric-item">
+                            <span class="ai-metric-lbl">예측 탄소/비용 절감</span>
+                            <span class="ai-metric-val" id="ai-estimated-saving">-- %</span>
+                        </div>
+                        <div class="ai-metric-item">
+                            <span class="ai-metric-lbl">다음 개시 권장</span>
+                            <span class="ai-metric-val highlight" id="ai-defer-hint">분석 중...</span>
+                        </div>
                     </div>
-                    
-                    <div class="tab-content" id="tab-python">
-                        <pre><code>import urllib.request
-import json
-import time
+                </div>
 
-def check_grid_and_run():
-    # VoltWise API 서버 호출
-    url = "http://localhost:8000/api/status/live"
-    try:
-        req = urllib.request.urlopen(url)
-        res = json.loads(req.read().decode())
-        if res.get("success") and res["rating"]["code"] in ["GREEN", "YELLOW"]:
-            print("🔋 ESG 전력망 수급 요건 충족. 학습 작업을 시작합니다.")
-            return True
-        else:
-            print("🚫 전력수급 오렌지/레드 주의 상태. 탄소 저감을 위해 30분 연기합니다.")
-            return False
-    except Exception as e:
-        print(f"Fallback 시작: {e}")
-        return True # API 장애 시에는 기본 실행 허용
+                <div class="ai-reasoning-panel">
+                    <h4 class="section-sub-title">AI 의사결정 브리핑</h4>
+                    <p id="ai-reasoning-text" class="card-intro">현재 전력망 상태를 수집하여 생성 인공지능이 탄소 배출량과 안정성을 결합 분석하는 중입니다...</p>
+                </div>
 
-if __name__ == '__main__':
-    while not check_grid_and_run():
-        time.sleep(1800) # 30분 대기 후 재호출
-    # python train.py 시작 로직 작성
-</code></pre>
-                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
-                    </div>
-                    
-                    <div class="tab-content" id="tab-actions">
-                        <pre><code>name: ESG ML Training Scheduler
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  train:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Check VoltWise Live Carbon Status
-        run: |
-          # VoltWise 클라우드 배포 서버로 수급 상황 검증
-          STATUS=$(curl -s "http://localhost:8000/api/status/live" | jq -r .rating.code)
-          echo "Current Grid Status is $STATUS"
-          if [ "$STATUS" == "RED" ] || [ "$STATUS" == "ORANGE" ]; then
-            echo "Grid stress is high. Delaying runner workflow."
-            exit 1 # 파이프라인 일시 차단
-          fi
-          
-      - name: Execute ML Training
-        run: python src/train.py</code></pre>
-                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
-                    </div>
+                <div class="ai-actions-panel">
+                    <h4 class="section-sub-title"><i class="fa-solid fa-list-check"></i> MLOps 실행 가이드라인</h4>
+                    <ul class="action-list-items" id="ai-actions-list">
+                        <li><i class="fa-solid fa-spinner fa-spin"></i> 대기 중...</li>
+                    </ul>
                 </div>
             </section>
         </main>
 
-        <!-- Footer -->
-        <footer class="app-footer">
-            <p>&copy; 2026 VoltWise. Powered by Google Cloud Platform & 한국전력거래소 실시간 Open API.</p>
-            <p class="footer-sub">본 애플리케이션은 친환경 서버 스케줄링을 통한 지속가능한 발전(ESG) 및 탄소 중립을 지원합니다.</p>
-        </footer>
+        <!-- Bottom Left: 24-Hour Trend Visualizer -->
+        <section class="grid-card chart-card full-width">
+            <div class="card-header" style="justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="card-icon-wrapper"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>24시간 전력망 & 탄소집약도 변동 추이</h3>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary);" id="trend-time-indicator">
+                    <i class="fa-solid fa-circle-info"></i> 시뮬레이션 작동 시 세부 수치가 순차 롤링 업데이트됩니다.
+                </div>
+            </div>
+            <div class="chart-wrapper wide-chart">
+                <canvas id="gridTrendChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Bottom Right: Developer CLI Integration Guide -->
+        <section class="grid-card dev-card full-width">
+            <div class="card-header">
+                <div class="card-icon-wrapper"><i class="fa-solid fa-code"></i></div>
+                <h3>Developer & MLOps 파이프라인 API 연동 가이드</h3>
+            </div>
+            <p class="card-intro">GPU 클러스터 스케줄러(Slurm, Kubernetes KEDA) 및 CI/CD 워크플로(Airflow, GitHub Actions)에 탄소 인식 코드를 즉시 내장할 수 있습니다.</p>
+            
+            <div class="tab-container">
+                <div class="tab-header">
+                    <button class="tab-btn active" data-tab="tab-bash">Shell (curl + jq)</button>
+                    <button class="tab-btn" data-tab="tab-python">Python Script</button>
+                    <button class="tab-btn" data-tab="tab-actions">GitHub Actions workflow</button>
+                </div>
+                
+                <div class="tab-content active" id="tab-bash">
+                    <pre><code># 실시간 전력 상태의 탄소 인식(Carbon-Aware) 추천이 RUN_NOW(즉시 기동)일 경우에만 AI 컨테이너 가동
+RECOMMENDATION=$(curl -s http://localhost:8000/api/advice | jq -r .recommendation)
+
+if [ "$RECOMMENDATION" = "RUN_NOW" ]; then
+  echo "✅ 전력망 공급 충분 및 탄소 밀도 최저. 대규모 LLM 파인튜닝 컨테이너를 가동합니다."
+  docker run --gpus all -d llm-training-job:latest
+else
+  DEFER_TIME=$(curl -s http://localhost:8000/api/advice | jq -r .defer_until_hint)
+  echo "⚠️ 현재 고탄소 발전 시간대. 작업을 보류하며, [$DEFER_TIME] 가동을 권장합니다."
+  echo "작업 가동을 지연 대기 큐로 이전합니다."
+fi</code></pre>
+                    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
+                </div>
+                
+                <div class="tab-content" id="tab-python">
+                    <pre><code>import urllib.request
+import json
+import sys
+
+def check_carbon_grid():
+    try:
+        req = urllib.request.Request("http://localhost:8000/api/advice", headers={'User-Agent': 'GridPulse-Agent'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            
+            if res.get("recommendation") == "RUN_NOW":
+                print(f"✅ 탄소 인식 가동 승인: {res.get('reasoning')}")
+                print(f"절감 효과 예측: {res.get('estimated_saving')}")
+                sys.exit(0) # 가동 수행 승인 코드
+            else:
+                print(f"❌ 가동 보류 권고: {res.get('reasoning')}")
+                print(f"개시 권장 시점: {res.get('defer_until_hint')}")
+                sys.exit(1) # 지연 및 대기 코드
+    except Exception as e:
+        print(f"⚠️ API 장애 발생, 무중단 기본 실행 모드 작동: {e}")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    check_carbon_grid()</code></pre>
+                    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
+                </div>
+                
+                <div class="tab-content" id="tab-actions">
+                    <pre><code>name: Carbon-Aware GPU Training
+on:
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: self-hosted-gpu-runner
+    steps:
+      - name: Check Carbon Grid Advisor
+        id: check_grid
+        run: |
+          ADVICE=$(curl -s http://localhost:8000/api/advice)
+          DECISION=$(echo $ADVICE | jq -r .recommendation)
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          
+      - name: Defer Training If Grid Heavy
+        if: steps.check_grid.outputs.decision != 'RUN_NOW'
+        run: |
+          echo "그리드가 혼잡하거나 발전원별 탄소 강도가 높아 작업을 슬립 상태로 지연시킵니다."
+          exit 1
+          
+      - name: Execute High Load GPU Train Job
+        run: |
+          python train_model.py --epochs 100 --batch-size 128</code></pre>
+                    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy Code</button>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <!-- Main JavaScript file link -->
+    <!-- UI Copy interaction and Tab scripts -->
+    <script>
+        function copyCode(btn) {
+            const pre = btn.previousElementSibling;
+            const code = pre.querySelector("code").textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = `<i class="fa-solid fa-check"></i> Copied!`;
+                btn.style.background = "var(--color-green)";
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.style.background = "rgba(255, 255, 255, 0.1)";
+                }, 2000);
+            });
+        }
+
+        // Tab Switcher logic
+        const tabs = document.querySelectorAll(".tab-btn");
+        const tabContents = document.querySelectorAll(".tab-content");
+
+        tabs.forEach(tab => {
+            tab.addEventListener("click", () => {
+                tabs.forEach(t => t.classList.remove("active"));
+                tabContents.forEach(tc => tc.classList.remove("active"));
+
+                tab.classList.add("active");
+                const activeTabContent = document.getElementById(tab.getAttribute("data-tab"));
+                if (activeTabContent) {
+                    activeTabContent.classList.add("active");
+                }
+            });
+        });
+    </script>
+
+    <!-- Custom Script Load -->
     <script src="/static/app.js"></script>
 </body>
 </html>
