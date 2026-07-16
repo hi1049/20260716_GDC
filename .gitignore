@@ -1,0 +1,12 @@
+# API Keys & Credentials (보안 키 및 인증 정보)
+.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
+.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
