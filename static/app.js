@@ -30,6 +30,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const tabContents = document.querySelectorAll(".tab-content");
     
     let trendChart = null;
+    const btnChart24h = document.getElementById("btn-chart-24h");
+    const btnChart7d = document.getElementById("btn-chart-7d");
+    const chartTitle = document.getElementById("chart-title");
+    let currentChartMode = "24h";
     const CIRCUMFERENCE = 251.2; // 2 * PI * r (r=40)
 
     // Setup Local Time Clock
@@ -163,17 +167,96 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Fetch and Render 24-Hour Trend Chart
+    // Fetch and Render Trend Chart (supports 24-Hour and 7-Day modes)
     async function renderChart() {
         try {
-            const response = await fetch("/api/status/history");
+            const url = currentChartMode === "24h" ? "/api/status/history" : "/api/status/weekly";
+            const response = await fetch(url);
             const res = await response.json();
             
             if (res.success) {
-                const labels = res.history.map(item => item.hour);
-                const reserveData = res.history.map(item => item.reserve_rate);
-                const loadData = res.history.map(item => item.current_load_gw);
-                const carbonData = res.history.map(item => item.carbon_saving_pct);
+                let labels = [];
+                let datasets = [];
+                
+                if (currentChartMode === "24h") {
+                    labels = res.history.map(item => item.hour);
+                    const reserveData = res.history.map(item => item.reserve_rate);
+                    const loadData = res.history.map(item => item.current_load_gw);
+                    const carbonData = res.history.map(item => item.carbon_saving_pct);
+                    
+                    datasets = [
+                        {
+                            label: '전력 예비율 (%)',
+                            data: reserveData,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '실시간 부하 (GW)',
+                            data: loadData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: '탄소 절감지수 (%)',
+                            data: carbonData,
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderWidth: 1.5,
+                            fill: false,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        }
+                    ];
+                } else {
+                    labels = res.weekly.map(item => item.label);
+                    const reserveData = res.weekly.map(item => item.avg_reserve_rate);
+                    const loadData = res.weekly.map(item => item.avg_load_gw);
+                    const esgScoreData = res.weekly.map(item => item.esg_score);
+                    
+                    datasets = [
+                        {
+                            label: '평균 예비율 (%)',
+                            data: reserveData,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '평균 부하 (GW)',
+                            data: loadData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: '종합 ESG 점수 (점)',
+                            data: esgScoreData,
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        }
+                    ];
+                }
                 
                 const ctx = document.getElementById("gridTrendChart").getContext("2d");
                 
@@ -185,39 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     type: 'line',
                     data: {
                         labels: labels,
-                        datasets: [
-                            {
-                                label: '전력 예비율 (%)',
-                                data: reserveData,
-                                borderColor: '#10b981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                borderWidth: 3,
-                                fill: true,
-                                tension: 0.4,
-                                yAxisID: 'y'
-                            },
-                            {
-                                label: '실시간 부하 (GW)',
-                                data: loadData,
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                                borderWidth: 2,
-                                borderDash: [4, 4],
-                                fill: false,
-                                tension: 0.4,
-                                yAxisID: 'y1'
-                            },
-                            {
-                                label: '탄소 절감지수 (%)',
-                                data: carbonData,
-                                borderColor: '#8b5cf6',
-                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                borderWidth: 1.5,
-                                fill: false,
-                                tension: 0.3,
-                                yAxisID: 'y'
-                            }
-                        ]
+                        datasets: datasets
                     },
                     options: {
                         responsive: true,
@@ -244,7 +295,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             },
                             y: {
                                 position: 'left',
-                                title: { display: true, text: '예비율 / 절감율 (%)', color: '#9ca3af' },
+                                title: { display: true, text: '예비율 / ESG 점수 (%)', color: '#9ca3af' },
                                 grid: { color: 'rgba(255,255,255,0.03)' },
                                 ticks: { color: '#9ca3af' }
                             },
@@ -284,6 +335,25 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById(tabId).classList.add("active");
         });
     });
+
+    // Chart Mode Switchers
+    if (btnChart24h && btnChart7d) {
+        btnChart24h.addEventListener("click", () => {
+            currentChartMode = "24h";
+            btnChart24h.classList.add("active");
+            btnChart7d.classList.remove("active");
+            chartTitle.textContent = "24시간 실시간 수급 추이";
+            renderChart();
+        });
+        
+        btnChart7d.addEventListener("click", () => {
+            currentChartMode = "7d";
+            btnChart7d.classList.add("active");
+            btnChart24h.classList.remove("active");
+            chartTitle.textContent = "7일 연속 장기 전력망 추이";
+            renderChart();
+        });
+    }
 
     // End-to-End Initial Loader
     async function initDashboard() {

@@ -151,9 +151,15 @@
 
             <!-- Bottom Left: 24-Hour Graph -->
             <section class="grid-card chart-card">
-                <div class="card-header">
-                    <div class="card-icon-wrapper"><i class="fa-solid fa-chart-line"></i></div>
-                    <h3>24시간 수급 추이 및 탄소 절감 계수</h3>
+                <div class="card-header" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="card-icon-wrapper"><i class="fa-solid fa-chart-line"></i></div>
+                        <h3 id="chart-title">24시간 실시간 수급 추이</h3>
+                    </div>
+                    <div class="chart-tab-switcher">
+                        <button class="switcher-btn active" id="btn-chart-24h">24시간 추이</button>
+                        <button class="switcher-btn" id="btn-chart-7d">7일 수급 추이</button>
+                    </div>
                 </div>
                 <div class="chart-wrapper">
                     <canvas id="gridTrendChart"></canvas>

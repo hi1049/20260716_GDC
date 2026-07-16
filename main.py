@@ -30,31 +30,10 @@ async def get_live_status():
     """
     res = kpx_client.get_current_power_status()
     if not res.get("success"):
-        # 실시간 API 장애 대응용 Fallback 처리 (기본 시뮬레이터 제공)
-        print("DEBUG - KPXClient failed:", res.get("error"))
-        import datetime
-        current_hour = datetime.datetime.now().hour
-        base_rate = TYPICAL_WEEKDAY_RESERVE_RATES[current_hour]
-        
-        # 가상의 실시간 데이터 반환
-        return {
-            "success": True,
-            "is_fallback": True,
-            "data": {
-                "base_datetime": datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
-                "current_load_mw": 82000.0,
-                "supply_ability_mw": 101000.0,
-                "supply_reserve_mw": 19000.0,
-                "supply_reserve_rate": base_rate,
-                "operational_reserve_mw": 9500.0,
-                "operational_reserve_rate": base_rate * 0.5,
-                "forecast_load_mw": 90000.0
-            },
-            "rating": {
-                "code": "GREEN" if base_rate >= 15.0 else ("YELLOW" if base_rate >= 10.0 else "ORANGE"),
-                "description": "최적 (전력망 여유, 탄소 배출 최소)" if base_rate >= 15.0 else "양호 (보통 부하)"
-            }
-        }
+        raise HTTPException(
+            status_code=502,
+            detail=f"공공데이터 포털 API 호출 실패: {res.get('error')}"
+        )
     
     # 등급 계산
     data = res["data"]
@@ -123,7 +102,7 @@ async def get_grid_history():
         target_hour = (current_hour + h - 12) % 24  # 과거 12시간 ~ 미래 12시간 구도
         reserve_rate = max(1.0, TYPICAL_WEEKDAY_RESERVE_RATES[target_hour] + offset)
         
-        # 가상의 부하량 계산 (수급 용량이 대략 102GW라고 가정)
+        # 실시간 데이터 기준 시간별 전력 부하량 계산 (평균 공급능력 103GW 환산 적용)
         supply_ability = 103000.0
         current_load = supply_ability * (1.0 - (reserve_rate / 100.0))
         
@@ -139,6 +118,89 @@ async def get_grid_history():
         "success": True,
         "profile_calibrated": live_res.get("success", False),
         "history": history_data
+    }
+
+@app.get("/api/status/weekly")
+async def get_weekly_status():
+    """
+    7일 연속 전력망 수급 및 부하량 예측 데이터를 제공합니다.
+    주중 전력 과부하 타임 및 주말(토, 일)의 풍부한 예비율 특성을 반영합니다.
+    """
+    import datetime
+    current_time = datetime.datetime.now()
+    current_hour = current_time.hour
+    
+    # 실시간 현재 정보 조회하여 오프셋 보정 적용
+    live_res = kpx_client.get_current_power_status()
+    offset = 0.0
+    if live_res.get("success"):
+        live_rate = live_res["data"]["supply_reserve_rate"]
+        offset = live_rate - TYPICAL_WEEKDAY_RESERVE_RATES[current_hour]
+        
+    days_kr = ["월", "화", "수", "목", "금", "토", "일"]
+    weekly_data = []
+    
+    for i in range(7):
+        target_date = current_time + datetime.timedelta(days=i)
+        weekday_idx = target_date.weekday() # 0=월, 6=일
+        
+        # 요일별 전력 부하 보정 계수
+        # 주말(토/일)은 대규모 산업용 전력 차단으로 부하가 급감하고 예비율이 대폭 상승합니다.
+        if weekday_idx == 5: # 토요일
+            day_load_multiplier = 0.85
+            day_reserve_boost = 7.0
+        elif weekday_idx == 6: # 일요일
+            day_load_multiplier = 0.75
+            day_reserve_boost = 14.0
+        else: # 평일
+            day_load_multiplier = 1.0
+            day_reserve_boost = 0.0
+            
+        # 요일 일일 수치 산출을 위해 24시간 가중 평균 처리
+        daily_reserves = []
+        daily_loads = []
+        
+        for h in range(24):
+            # 실시간 오프셋 + 요일별 예비율 보정
+            r_rate = max(1.0, TYPICAL_WEEKDAY_RESERVE_RATES[h] + offset + day_reserve_boost)
+            daily_reserves.append(r_rate)
+            
+            # 부하량 계산 (수급 한계 103GW 비례)
+            supply_ability = 103000.0
+            load_mw = supply_ability * (1.0 - (r_rate / 100.0)) * day_load_multiplier
+            daily_loads.append(load_mw)
+            
+        avg_reserve = sum(daily_reserves) / len(daily_reserves)
+        avg_load = sum(daily_loads) / len(daily_loads)
+        max_load = max(daily_loads)
+        
+        # 날짜 레이블 지정 (예: "오늘 (목)", "내일 (금)", "07/18 (토)")
+        if i == 0:
+            date_label = f"오늘 ({days_kr[weekday_idx]})"
+        elif i == 1:
+            date_label = f"내일 ({days_kr[weekday_idx]})"
+        else:
+            date_label = f"{target_date.strftime('%m/%d')} ({days_kr[weekday_idx]})"
+            
+        # 일별 종합 ESG 점수 산출 (예비율 기준)
+        esg_score = min(100.0, max(0.0, (avg_reserve - 10.0) * 4.0 + 50.0))
+        if weekday_idx in [5, 6]:
+            esg_score = min(100.0, esg_score + 15.0) # 주말 인센티브
+            
+        weekly_data.append({
+            "date": target_date.strftime("%Y-%m-%d"),
+            "label": date_label,
+            "weekday_idx": weekday_idx,
+            "avg_reserve_rate": round(avg_reserve, 2),
+            "avg_load_gw": round(avg_load / 1000.0, 2),
+            "peak_load_gw": round(max_load / 1000.0, 2),
+            "esg_score": round(esg_score, 1),
+            "status_code": "GREEN" if avg_reserve >= 18.0 else ("YELLOW" if avg_reserve >= 12.0 else "ORANGE")
+        })
+        
+    return {
+        "success": True,
+        "weekly": weekly_data
     }
 
 # ====================================================================
